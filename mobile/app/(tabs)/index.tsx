@@ -3,8 +3,11 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useGoogleFitSteps } from '@/hooks/use-google-fit-steps';
 
 export default function HomeScreen() {
+  const { stepsToday } = useGoogleFitSteps();
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -27,6 +30,13 @@ export default function HomeScreen() {
 
         <View style={styles.row}>
           <ThemedView style={styles.card}>
+            <ThemedText style={styles.cardLabel}>Steps today</ThemedText>
+            <ThemedText type="title" style={styles.cardMain}>
+              {stepsToday ?? '—'}
+            </ThemedText>
+            <ThemedText style={styles.cardCaption}>Synced from Google Fit (placeholder)</ThemedText>
+          </ThemedView>
+          <ThemedView style={styles.card}>
             <ThemedText style={styles.cardLabel}>Calories</ThemedText>
             <ThemedText type="title" style={styles.cardMain}>
               1,240
@@ -48,14 +58,15 @@ export default function HomeScreen() {
 
         <ThemedView style={styles.weekRow}>
           {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-            <ThemedView
-              key={d + i}
-              style={[styles.dayChip, i === 2 && styles.dayChipActive]}
-            >
-              <ThemedText style={i === 2 ? styles.dayChipTextActive : styles.dayChipText}>
-                {d}
-              </ThemedText>
-            </ThemedView>
+            <React.Fragment key={d + i}>
+              <ThemedView
+                style={[styles.dayChip, i === 2 && styles.dayChipActive]}
+              >
+                <ThemedText style={i === 2 ? styles.dayChipTextActive : styles.dayChipText}>
+                  {d}
+                </ThemedText>
+              </ThemedView>
+            </React.Fragment>
           ))}
         </ThemedView>
 
@@ -93,15 +104,19 @@ const styles = StyleSheet.create({
   },
   primaryCard: {
     flex: 1,
-    borderRadius: 18,
-    padding: 16,
-    backgroundColor: '#22c55e30',
+    borderRadius: 24,
+    padding: 20,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1d4ed8',
   },
   card: {
     flex: 1,
-    borderRadius: 16,
-    padding: 14,
-    backgroundColor: '#11182710',
+    borderRadius: 20,
+    padding: 16,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1f2937',
   },
   cardLabel: {
     opacity: 0.7,
@@ -128,10 +143,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#11182708',
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1f2937',
   },
   dayChipActive: {
-    backgroundColor: '#22c55e',
+    backgroundColor: '#38bdf8',
+    borderColor: '#38bdf8',
   },
   dayChipText: {
     opacity: 0.8,

@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, TextInput, View, Pressable } from 'react-native';
+import { FlatList, StyleSheet, TextInput, View, Pressable, ScrollView } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-
-const API_BASE_URL = 'http://10.0.2.2:4000';
+import { API_BASE_URL } from '@/constants/api';
 
 type Workout = {
   id: number;
@@ -13,9 +13,21 @@ type Workout = {
   date: string;
 };
 
+type Exercise = {
+  name: string;
+  type: string;
+  muscle: string;
+  difficulty: string;
+  instructions: string;
+};
+
 export default function WorkoutScreen() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [name, setName] = useState('');
+  const [muscle, setMuscle] = useState('chest');
+  const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate' | 'expert' | ''>('');
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [loadingExercises, setLoadingExercises] = useState(false);
 
   const fetchWorkouts = async () => {
     try {
@@ -42,8 +54,27 @@ export default function WorkoutScreen() {
     }
   };
 
+  const fetchExercises = async () => {
+    try {
+      setLoadingExercises(true);
+      const params = new URLSearchParams();
+      if (muscle) params.append('muscle', muscle);
+      if (difficulty) params.append('difficulty', difficulty);
+
+      const res = await axios.get<Exercise[]>(`${API_BASE_URL}/exercises`, {
+        params,
+      });
+      setExercises(res.data);
+    } catch (e) {
+      console.log('Error fetching exercises', e);
+    } finally {
+      setLoadingExercises(false);
+    }
+  };
+
   useEffect(() => {
     fetchWorkouts();
+    fetchExercises();
   }, []);
 
   return (
@@ -57,6 +88,7 @@ export default function WorkoutScreen() {
         <TextInput
           style={styles.input}
           placeholder="Workout name (Push, Legs, Pull...)"
+          placeholderTextColor="#6b7280"
           value={name}
           onChangeText={setName}
         />
@@ -79,6 +111,54 @@ export default function WorkoutScreen() {
           </ThemedView>
         )}
       />
+
+      <ScrollView contentContainerStyle={styles.exercisesSection}>
+        <ThemedText type="subtitle" style={styles.sectionTitle}>
+          Explore Exercises
+        </ThemedText>
+
+        <View style={styles.filtersRow}>
+          <TextInput
+            style={styles.muscleInput}
+            placeholder="Muscle (e.g. chest, biceps)"
+            placeholderTextColor="#6b7280"
+            value={muscle}
+            onChangeText={setMuscle}
+          />
+          <View style={styles.pickerWrapper}>
+            <Picker
+              selectedValue={difficulty}
+              dropdownIconColor="#6b7280"
+              style={styles.picker}
+              onValueChange={(value) => setDifficulty(value as any)}
+            >
+              <Picker.Item label="Any difficulty" value="" color="#6b7280" />
+              <Picker.Item label="Beginner" value="beginner" color="#e5e7eb" />
+              <Picker.Item label="Intermediate" value="intermediate" color="#e5e7eb" />
+              <Picker.Item label="Expert" value="expert" color="#e5e7eb" />
+            </Picker>
+          </View>
+          <Pressable style={styles.filterButton} onPress={fetchExercises}>
+            <ThemedText style={styles.filterButtonText}>
+              {loadingExercises ? 'Loading...' : 'Search'}
+            </ThemedText>
+          </Pressable>
+        </View>
+
+        {exercises.map((ex) => (
+          <React.Fragment key={ex.name}>
+            <ThemedView style={styles.exerciseCard}>
+              <ThemedText type="defaultSemiBold" style={styles.exerciseTitle}>
+                {ex.name}
+              </ThemedText>
+              <ThemedText style={styles.exerciseMeta}>
+                {ex.type} • {ex.muscle} • {ex.difficulty}
+              </ThemedText>
+              <ThemedText style={styles.exerciseInstructions}>{ex.instructions}</ThemedText>
+            </ThemedView>
+          </React.Fragment>
+        ))}
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -103,17 +183,18 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#4b5563',
+    borderColor: '#1f2937',
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 8,
+    color: '#e5e7eb',
   },
   addButton: {
     borderRadius: 999,
-    paddingHorizontal: 18,
+    paddingHorizontal: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#22c55e',
+    backgroundColor: '#38bdf8',
   },
   addButtonText: {
     fontWeight: '600',
@@ -123,9 +204,11 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   card: {
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: '#11182710',
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1f2937',
     marginBottom: 10,
   },
   cardHeader: {
@@ -141,6 +224,65 @@ const styles = StyleSheet.create({
   },
   cardTag: {
     opacity: 0.8,
+  },
+  exercisesSection: {
+    paddingTop: 8,
+    paddingBottom: 32,
+  },
+  sectionTitle: {
+    marginBottom: 8,
+  },
+  filtersRow: {
+    flexDirection: 'column',
+    gap: 8,
+    marginBottom: 12,
+  },
+  muscleInput: {
+    borderWidth: 1,
+    borderColor: '#1f2937',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    color: '#e5e7eb',
+  },
+  pickerWrapper: {
+    borderWidth: 1,
+    borderColor: '#1f2937',
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#020617',
+  },
+  picker: {
+    color: '#e5e7eb',
+  },
+  filterButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 22,
+    paddingVertical: 8,
+    backgroundColor: '#38bdf8',
+    marginTop: 2,
+  },
+  filterButtonText: {
+    fontWeight: '600',
+  },
+  exerciseCard: {
+    borderRadius: 20,
+    padding: 16,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1f2937',
+    marginBottom: 10,
+  },
+  exerciseTitle: {
+    marginBottom: 4,
+  },
+  exerciseMeta: {
+    opacity: 0.8,
+    marginBottom: 6,
+  },
+  exerciseInstructions: {
+    opacity: 0.9,
   },
 });
 

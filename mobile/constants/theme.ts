@@ -5,24 +5,25 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+// Dark navy + neon blue fitness palette
+const tintColorLight = '#38bdf8'; // cyan
+const tintColorDark = '#0ea5e9'; // bright blue
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
+    text: '#e5e7eb',
+    background: '#020617',
     tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    icon: '#9ca3af',
+    tabIconDefault: '#4b5563',
     tabIconSelected: tintColorLight,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    text: '#e5e7eb',
+    background: '#020617',
     tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    icon: '#9ca3af',
+    tabIconDefault: '#4b5563',
     tabIconSelected: tintColorDark,
   },
 };
