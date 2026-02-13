@@ -1,22 +1,85 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
+import axios from 'axios';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useGoogleFitSteps } from '@/hooks/use-google-fit-steps';
+import { API_BASE_URL } from '@/constants/api';
+
+type WorkoutSummary = {
+  date: string;
+};
 
 export default function HomeScreen() {
   const { stepsToday } = useGoogleFitSteps();
+  const [sessionsThisWeek, setSessionsThisWeek] = useState(0);
+  const [targetSessions] = useState(5);
+  const [daysWithWorkout, setDaysWithWorkout] = useState<boolean[]>([false, false, false, false, false, false, false]);
+
+  useEffect(() => {
+    const fetchWeeklyWorkouts = async () => {
+      try {
+        const res = await axios.get<WorkoutSummary[]>(`${API_BASE_URL}/workouts`);
+
+        const now = new Date();
+        const day = now.getDay(); // 0 (Sun) - 6 (Sat)
+        const mondayOffset = day === 0 ? -6 : 1 - day;
+        const monday = new Date(now);
+        monday.setDate(now.getDate() + mondayOffset);
+        monday.setHours(0, 0, 0, 0);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        sunday.setHours(23, 59, 59, 999);
+
+        const days = [false, false, false, false, false, false, false];
+        const uniqueDates = new Set<string>();
+
+        res.data.forEach((w) => {
+          if (!w.date) return;
+          const d = new Date(w.date);
+          if (d >= monday && d <= sunday) {
+            const jsDay = d.getDay();
+            const idx = jsDay === 0 ? 6 : jsDay - 1; // Monday=0 ... Sunday=6
+            days[idx] = true;
+            uniqueDates.add(w.date);
+          }
+        });
+
+        setDaysWithWorkout(days);
+        setSessionsThisWeek(uniqueDates.size);
+      } catch (e) {
+        console.log('Error fetching weekly workouts', e);
+      }
+    };
+
+    fetchWeeklyWorkouts();
+  }, []);
+
+  const currentDayIndex = (() => {
+    const jsDay = new Date().getDay();
+    return jsDay === 0 ? 6 : jsDay - 1;
+  })();
 
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <ThemedText type="title" style={styles.heading}>
-          GymRack Overview
-        </ThemedText>
-        <ThemedText style={styles.subheading}>
-          Your daily snapshot: workouts, nutrition, and progress in one place.
-        </ThemedText>
+        <View style={styles.heroRow}>
+          <View style={styles.heroText}>
+            <ThemedText type="title" style={styles.heading}>
+              GymRack
+            </ThemedText>
+            <ThemedText style={styles.subheading}>
+              Track your steps, workouts, and diet in one place.
+            </ThemedText>
+          </View>
+          <Image
+            source={require('@/assets/images/splash-icon.png')}
+            style={styles.heroImage}
+            contentFit="cover"
+          />
+        </View>
 
         <View style={styles.row}>
           <ThemedView style={styles.primaryCard}>
@@ -34,7 +97,7 @@ export default function HomeScreen() {
             <ThemedText type="title" style={styles.cardMain}>
               {stepsToday ?? '—'}
             </ThemedText>
-            <ThemedText style={styles.cardCaption}>Synced from Google Fit (placeholder)</ThemedText>
+            <ThemedText style={styles.cardCaption}>Synced from activity data</ThemedText>
           </ThemedView>
           <ThemedView style={styles.card}>
             <ThemedText style={styles.cardLabel}>Calories</ThemedText>
@@ -60,9 +123,17 @@ export default function HomeScreen() {
           {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
             <React.Fragment key={d + i}>
               <ThemedView
-                style={[styles.dayChip, i === 2 && styles.dayChipActive]}
+                style={[
+                  styles.dayChip,
+                  i === currentDayIndex && styles.dayChipActive,
+                  daysWithWorkout[i] && styles.dayChipHasWorkout,
+                ]}
               >
-                <ThemedText style={i === 2 ? styles.dayChipTextActive : styles.dayChipText}>
+                <ThemedText
+                  style={
+                    i === currentDayIndex ? styles.dayChipTextActive : styles.dayChipText
+                  }
+                >
                   {d}
                 </ThemedText>
               </ThemedView>
@@ -73,7 +144,7 @@ export default function HomeScreen() {
         <ThemedView style={styles.progressCard}>
           <ThemedText style={styles.cardLabel}>Sessions completed</ThemedText>
           <ThemedText type="title" style={styles.cardMain}>
-            3 / 5
+            {sessionsThisWeek} / {targetSessions}
           </ThemedText>
           <ThemedText style={styles.cardCaption}>Stay consistent to hit your goal.</ThemedText>
         </ThemedView>
@@ -90,12 +161,29 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
   },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  heroText: {
+    flex: 1,
+    marginRight: 12,
+  },
+  heroImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
   heading: {
     marginBottom: 4,
+    fontSize: 22,
   },
   subheading: {
     opacity: 0.8,
-    marginBottom: 20,
+    marginBottom: 12,
+    fontSize: 13,
   },
   row: {
     flexDirection: 'row',
@@ -149,6 +237,9 @@ const styles = StyleSheet.create({
   },
   dayChipActive: {
     backgroundColor: '#38bdf8',
+    borderColor: '#38bdf8',
+  },
+  dayChipHasWorkout: {
     borderColor: '#38bdf8',
   },
   dayChipText: {

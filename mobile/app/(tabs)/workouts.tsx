@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, TextInput, View, Pressable, ScrollView } from 'react-native';
+import { FlatList, StyleSheet, TextInput, View, Pressable, ScrollView, Linking } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
 
@@ -19,6 +19,9 @@ type Exercise = {
   muscle: string;
   difficulty: string;
   instructions: string;
+  thumbnailUrl?: string;
+  youtubeSearchUrl?: string;
+  videoId?: string;
 };
 
 export default function WorkoutScreen() {
@@ -51,6 +54,15 @@ export default function WorkoutScreen() {
       fetchWorkouts();
     } catch (e) {
       console.log('Error adding workout', e);
+    }
+  };
+
+  const deleteWorkout = async (id: number) => {
+    try {
+      await axios.delete(`${API_BASE_URL}/workouts/${id}`);
+      fetchWorkouts();
+    } catch (e) {
+      console.log('Error deleting workout', e);
     }
   };
 
@@ -97,22 +109,32 @@ export default function WorkoutScreen() {
         </Pressable>
       </View>
 
-      <FlatList
-        data={workouts}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <ThemedView style={styles.card}>
-            <View style={styles.cardHeader}>
-              <ThemedText style={styles.cardTitle}>{item.name}</ThemedText>
-              <ThemedText style={styles.cardDate}>{item.date}</ThemedText>
-            </View>
-            <ThemedText style={styles.cardTag}>Strength • Custom routine</ThemedText>
-          </ThemedView>
-        )}
-      />
+      <ScrollView 
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+      >
+        <View style={styles.workoutsSection}>
+          {workouts.map((item) => (
+            <ThemedView key={item.id.toString()} style={styles.card}>
+              <View style={styles.cardHeader}>
+                <View style={styles.cardHeaderLeft}>
+                  <ThemedText style={styles.cardTitle}>{item.name}</ThemedText>
+                  <ThemedText style={styles.cardDate}>{item.date}</ThemedText>
+                </View>
+                <Pressable
+                  style={styles.deleteButton}
+                  onPress={() => deleteWorkout(item.id)}
+                >
+                  <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
+                </Pressable>
+              </View>
+              <ThemedText style={styles.cardTag}>Strength • Custom routine</ThemedText>
+            </ThemedView>
+          ))}
+        </View>
 
-      <ScrollView contentContainerStyle={styles.exercisesSection}>
+        <View style={styles.exercisesSection}>
         <ThemedText type="subtitle" style={styles.sectionTitle}>
           Explore Exercises
         </ThemedText>
@@ -151,13 +173,26 @@ export default function WorkoutScreen() {
               <ThemedText type="defaultSemiBold" style={styles.exerciseTitle}>
                 {ex.name}
               </ThemedText>
-              <ThemedText style={styles.exerciseMeta}>
-                {ex.type} • {ex.muscle} • {ex.difficulty}
-              </ThemedText>
+              <View style={styles.exerciseHeader}>
+                <ThemedText style={styles.exerciseMeta}>
+                  {ex.type} • {ex.muscle} • {ex.difficulty}
+                </ThemedText>
+                
+                {ex.youtubeSearchUrl && (
+                  <Pressable
+                    style={styles.watchVideoButton}
+                    onPress={() => Linking.openURL(ex.youtubeSearchUrl!)}
+                  >
+                    <ThemedText style={styles.watchVideoButtonText}>▶ Watch Video</ThemedText>
+                  </Pressable>
+                )}
+              </View>
+              
               <ThemedText style={styles.exerciseInstructions}>{ex.instructions}</ThemedText>
             </ThemedView>
           </React.Fragment>
         ))}
+        </View>
       </ScrollView>
     </ThemedView>
   );
@@ -199,34 +234,61 @@ const styles = StyleSheet.create({
   addButtonText: {
     fontWeight: '600',
   },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 32,
+  },
+  workoutsSection: {
+    marginBottom: 24,
+  },
   listContent: {
     paddingTop: 4,
     paddingBottom: 16,
+    gap: 16,
   },
   card: {
-    padding: 16,
+    padding: 20,
     borderRadius: 20,
     backgroundColor: '#020617',
     borderWidth: 1,
     borderColor: '#1f2937',
-    marginBottom: 10,
+    marginBottom: 16,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 4,
+  },
+  cardHeaderLeft: {
+    flex: 1,
   },
   cardTitle: {
     fontWeight: '600',
   },
   cardDate: {
     opacity: 0.7,
+    marginTop: 2,
+  },
+  deleteButton: {
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#ef4444',
+    marginLeft: 12,
+  },
+  deleteButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   cardTag: {
     opacity: 0.8,
   },
   exercisesSection: {
-    paddingTop: 8,
+    paddingTop: 24,
     paddingBottom: 32,
   },
   sectionTitle: {
@@ -277,12 +339,32 @@ const styles = StyleSheet.create({
   exerciseTitle: {
     marginBottom: 4,
   },
+  exerciseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   exerciseMeta: {
     opacity: 0.8,
-    marginBottom: 6,
+    flex: 1,
   },
   exerciseInstructions: {
     opacity: 0.9,
+  },
+  watchVideoButton: {
+    backgroundColor: '#ff0000',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  watchVideoButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
 

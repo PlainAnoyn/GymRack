@@ -1,18 +1,28 @@
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 
-// Placeholder hook for Google Fit integration.
-// Later, you can replace the mock implementation with real Google Fit auth + Fitness API calls.
+import { API_BASE_URL } from '@/constants/api';
 
+// Hook to fetch today's steps from the backend.
+// The backend can later be wired to Google Fit or another real data source.
 export function useGoogleFitSteps() {
   const [stepsToday, setStepsToday] = useState<number | null>(null);
 
   useEffect(() => {
-    // TODO: Integrate with Google Fit / Google Fitness REST API.
-    // For now, show a static value as a placeholder.
-    setStepsToday(5423);
+    const fetchSteps = async () => {
+      try {
+        const res = await axios.get<{ steps: number }>(`${API_BASE_URL}/steps-today`);
+        setStepsToday(res.data.steps);
+      } catch (e) {
+        console.log('Error fetching steps', e);
+      }
+    };
+
+    fetchSteps();
   }, []);
 
   return { stepsToday };
 }
+
 
 
