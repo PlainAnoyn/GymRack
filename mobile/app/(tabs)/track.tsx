@@ -56,6 +56,7 @@ export default function TrackScreen() {
     original: string;
     corrected: string;
   } | null>(null);
+  const [filter, setFilter] = useState<'all' | 'pr' | 'highest_weight' | 'highest_reps'>('all');
 
   const fetchLogs = async () => {
     try {
@@ -204,6 +205,43 @@ export default function TrackScreen() {
     });
   };
 
+  const getFilteredLogs = () => {
+    let filtered = [...logs];
+
+    // Apply filter
+    if (filter === 'pr') {
+      filtered = filtered.filter((log) => log.is_pr);
+    }
+
+    // Apply sorting
+    if (filter === 'highest_weight') {
+      filtered.sort((a, b) => {
+        // First by weight descending, then by reps descending
+        if (b.weight !== a.weight) {
+          return b.weight - a.weight;
+        }
+        return b.reps - a.reps;
+      });
+    } else if (filter === 'highest_reps') {
+      filtered.sort((a, b) => {
+        // First by reps descending, then by weight descending
+        if (b.reps !== a.reps) {
+          return b.reps - a.reps;
+        }
+        return b.weight - a.weight;
+      });
+    } else {
+      // Default: sort by date (newest first)
+      filtered.sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return dateB - dateA;
+      });
+    }
+
+    return filtered;
+  };
+
   return (
     <ThemedView style={styles.container}>
       <ThemedText type="title" style={styles.header}>
@@ -309,7 +347,7 @@ export default function TrackScreen() {
           <View style={styles.pickerWrapper}>
             <Picker
               selectedValue={muscleGroup}
-              dropdownIconColor="#6b7280"
+              dropdownIconColor="#38bdf8"
               style={styles.picker}
               onValueChange={(value) => setMuscleGroup(value)}
             >
@@ -318,7 +356,7 @@ export default function TrackScreen() {
                   key={group}
                   label={group.charAt(0).toUpperCase() + group.slice(1)}
                   value={group}
-                  color="#e5e7eb"
+                  color="#38bdf8"
                 />
               ))}
             </Picker>
@@ -370,18 +408,37 @@ export default function TrackScreen() {
 
         {/* Workout History */}
         <View style={styles.historySection}>
-          <ThemedText type="subtitle" style={styles.historyTitle}>
-            Workout History
-          </ThemedText>
+          <View style={styles.historyHeader}>
+            <ThemedText type="subtitle" style={styles.historyTitle}>
+              Workout History
+            </ThemedText>
+            <View style={styles.filterWrapper}>
+              <Picker
+                selectedValue={filter}
+                dropdownIconColor="#38bdf8"
+                style={styles.filterPicker}
+                onValueChange={(value) => setFilter(value)}
+              >
+                <Picker.Item label="All" value="all" color="#38bdf8" />
+                <Picker.Item label="PR Only" value="pr" color="#38bdf8" />
+                <Picker.Item label="Highest Weight" value="highest_weight" color="#38bdf8" />
+                <Picker.Item label="Highest Reps" value="highest_reps" color="#38bdf8" />
+              </Picker>
+            </View>
+          </View>
 
-          {logs.length === 0 ? (
+          {getFilteredLogs().length === 0 ? (
             <ThemedView style={styles.emptyCard}>
               <ThemedText style={styles.emptyText}>
-                No workouts logged yet.{'\n'}Start tracking your progress!
+                {logs.length === 0
+                  ? "No workouts logged yet.\nStart tracking your progress!"
+                  : filter === 'pr'
+                    ? "No PR workouts found.\nKeep pushing for new records!"
+                    : "No workouts match this filter."}
               </ThemedText>
             </ThemedView>
           ) : (
-            logs.map((log) => (
+            getFilteredLogs().map((log) => (
               <ThemedView key={log.id} style={styles.logCard}>
                 <View style={styles.logHeader}>
                   <View style={styles.logHeaderLeft}>
@@ -407,12 +464,6 @@ export default function TrackScreen() {
                   <View style={styles.statBox}>
                     <ThemedText style={styles.statValue}>{log.reps}</ThemedText>
                     <ThemedText style={styles.statLabel}>Reps</ThemedText>
-                  </View>
-                  <View style={styles.statBox}>
-                    <ThemedText style={styles.statValue}>
-                      {log.weight * log.reps} kg
-                    </ThemedText>
-                    <ThemedText style={styles.statLabel}>Volume</ThemedText>
                   </View>
                 </View>
 
@@ -463,6 +514,10 @@ const styles = StyleSheet.create({
   formTitle: {
     marginBottom: 16,
   },
+  inputContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
   input: {
     borderWidth: 1,
     borderColor: '#1f2937',
@@ -471,19 +526,64 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     color: '#e5e7eb',
     fontSize: 15,
-    marginBottom: 12,
     backgroundColor: '#0f172a',
   },
-  pickerWrapper: {
+  suggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#0f172a',
     borderWidth: 1,
     borderColor: '#1f2937',
+    borderRadius: 12,
+    marginTop: 4,
+    zIndex: 1000,
+    maxHeight: 200,
+  },
+  suggestionItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1f2937',
+  },
+  suggestionText: {
+    color: '#e5e7eb',
+    fontSize: 14,
+  },
+  correctionBanner: {
+    backgroundColor: '#1e3a5f',
+    borderWidth: 1,
+    borderColor: '#38bdf8',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  correctionText: {
+    color: '#38bdf8',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  pickerWrapper: {
+    borderWidth: 1.5,
+    borderColor: '#38bdf8',
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#0f172a',
     marginBottom: 12,
+    height: 50,
+    justifyContent: 'center',
+    shadowColor: '#38bdf8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   picker: {
-    color: '#e5e7eb',
+    color: '#38bdf8',
+    backgroundColor: 'transparent',
+    height: 50,
+    fontSize: 15,
   },
   row: {
     flexDirection: 'row',
@@ -522,8 +622,36 @@ const styles = StyleSheet.create({
   historySection: {
     marginTop: 8,
   },
-  historyTitle: {
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
+    gap: 12,
+  },
+  historyTitle: {
+    flex: 1,
+  },
+  filterWrapper: {
+    borderWidth: 1.5,
+    borderColor: '#38bdf8',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#0f172a',
+    minWidth: 160,
+    height: 48,
+    justifyContent: 'center',
+    shadowColor: '#38bdf8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  filterPicker: {
+    color: '#38bdf8',
+    backgroundColor: 'transparent',
+    height: 48,
+    fontSize: 15,
   },
   emptyCard: {
     borderRadius: 20,

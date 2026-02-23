@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "import-exercises": "node import-exercises.js"
   },
   "keywords": [],
   "author": "",
@@ -11,6 +12,7 @@
   "description": "",
   "dependencies": {
     "cors": "^2.8.6",
+    "csv-parser": "^3.2.0",
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "nodemon": "^3.1.11",

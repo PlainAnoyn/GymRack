@@ -17,6 +17,12 @@ const pool = new Pool({
 
 const API_NINJAS_KEY = process.env.API_NINJAS_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
+// Support a few env var names so it's easier to configure
+const MUSCLEWIKI_API_KEY =
+  process.env.MUSCLEWIKI_API_KEY ||
+  process.env.MUSCLEWIKI_KEY ||
+  process.env.MUSCLEWIKI;
+console.log('MUSCLEWIKI_API_KEY loaded?', !!MUSCLEWIKI_API_KEY);
 
 // Fuzzy string matching using Levenshtein distance
 function levenshteinDistance(str1, str2) {
@@ -130,77 +136,122 @@ app.delete('/workouts/:id', async (req, res) => {
 
 app.get('/exercises', async (req, res) => {
   try {
-    if (!API_NINJAS_KEY) {
-      return res.status(500).json({ error: 'missing_api_key' });
+    const { muscle, type, difficulty, name } = req.query;
+
+    if (!MUSCLEWIKI_API_KEY) {
+      return res
+        .status(500)
+        .json({ error: 'missing_api_key', message: 'MuscleWiki API key not configured' });
     }
 
-    const { muscle, type, difficulty } = req.query;
+    // 1) Get a page of exercise summaries from MuscleWiki
     const params = new URLSearchParams();
-    if (muscle) params.append('muscle', muscle.toString());
-    if (type) params.append('type', type.toString());
-    if (difficulty) params.append('difficulty', difficulty.toString());
+    params.set('limit', '20');
+    params.set('offset', '0');
+    const listUrl = `https://api.musclewiki.com/exercises?${params.toString()}`;
 
-    const url = `https://api.api-ninjas.com/v1/exercises${params.toString() ? `?${params}` : ''}`;
-
-    const response = await fetch(url, {
+    console.log('📡 Fetching list from MuscleWiki:', listUrl);
+    const listRes = await fetch(listUrl, {
       headers: {
-        'X-Api-Key': API_NINJAS_KEY,
+        'X-API-Key': MUSCLEWIKI_API_KEY,
       },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('API Ninjas error', response.status, errorText);
-      return res.status(502).json({ error: 'upstream_error', message: errorText });
+    if (!listRes.ok) {
+      const text = await listRes.text();
+      console.error('MuscleWiki list error', listRes.status, text);
+      return res
+        .status(502)
+        .json({ error: 'upstream_error', message: 'Failed to fetch exercises list' });
     }
 
-    const data = await response.json();
-    
-    // Enrich exercises with YouTube video thumbnails and URLs
-    const enrichedData = await Promise.all(
-      data.map(async (exercise) => {
-        // Create YouTube search URL for exercise tutorials
-        const searchQuery = encodeURIComponent(`${exercise.name} ${exercise.muscle} exercise tutorial`);
-        const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${searchQuery}`;
-        
-        let thumbnailUrl = null;
-        let videoId = null;
-        
-        // Try to get YouTube video thumbnail using YouTube Data API
-        if (YOUTUBE_API_KEY) {
-          try {
-            const youtubeSearchUrl_api = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(`${exercise.name} ${exercise.muscle} exercise`)}&type=video&maxResults=1&key=${YOUTUBE_API_KEY}`;
-            const youtubeResponse = await fetch(youtubeSearchUrl_api);
-            
-            if (youtubeResponse.ok) {
-              const youtubeData = await youtubeResponse.json();
-              if (youtubeData.items && youtubeData.items.length > 0) {
-                videoId = youtubeData.items[0].id.videoId;
-                thumbnailUrl = youtubeData.items[0].snippet.thumbnails.high?.url || 
-                              youtubeData.items[0].snippet.thumbnails.medium?.url ||
-                              youtubeData.items[0].snippet.thumbnails.default?.url;
-              }
-            }
-          } catch (err) {
-            console.error('YouTube API error:', err);
-          }
-        }
-        
-        // Fallback to placeholder if no thumbnail found
-        if (!thumbnailUrl) {
-          thumbnailUrl = `https://via.placeholder.com/400x300/1f2937/38bdf8?text=${encodeURIComponent(exercise.name)}`;
-        }
-        
-        return {
-          ...exercise,
-          youtubeSearchUrl: videoId ? `https://www.youtube.com/watch?v=${videoId}` : youtubeSearchUrl,
-          thumbnailUrl,
-          videoId,
-        };
-      })
-    );
+    const listJson = await listRes.json();
+    const summaries = Array.isArray(listJson.results) ? listJson.results : [];
 
-    res.json(enrichedData);
+    // 2) Fetch full details for each exercise id
+    const detailPromises = summaries.map(async (summary) => {
+      try {
+        const detailUrl = `https://api.musclewiki.com/exercises/${summary.id}`;
+        const detailRes = await fetch(detailUrl, {
+          headers: {
+            'X-API-Key': MUSCLEWIKI_API_KEY,
+          },
+        });
+        if (!detailRes.ok) {
+          return null;
+        }
+        const detail = await detailRes.json();
+        return detail;
+      } catch (e) {
+        console.error('MuscleWiki detail error for', summary.id, e.message);
+        return null;
+      }
+    });
+
+    const details = (await Promise.all(detailPromises)).filter(Boolean);
+
+    // 3) Apply filters locally
+    let filtered = details;
+
+    if (muscle) {
+      const m = muscle.toString().toLowerCase();
+      filtered = filtered.filter((ex) => {
+        const primary = Array.isArray(ex.primary_muscles) ? ex.primary_muscles : [];
+        const secondary = Array.isArray(ex.secondary_muscles) ? ex.secondary_muscles : [];
+        const all = [...primary, ...secondary].map((x) => x.toLowerCase());
+        return all.some((pm) => pm.includes(m));
+      });
+    }
+
+    if (type) {
+      const t = type.toString().toLowerCase();
+      filtered = filtered.filter(
+        (ex) =>
+          (ex.category && ex.category.toLowerCase().includes(t)) ||
+          (ex.mechanic && ex.mechanic.toLowerCase().includes(t))
+      );
+    }
+
+    if (difficulty) {
+      const d = difficulty.toString().toLowerCase();
+      filtered = filtered.filter(
+        (ex) => ex.difficulty && ex.difficulty.toLowerCase().includes(d)
+      );
+    }
+
+    if (name) {
+      const q = name.toString().toLowerCase();
+      filtered = filtered.filter(
+        (ex) => ex.name && ex.name.toLowerCase().includes(q)
+      );
+    }
+
+    // 4) Return full MuscleWiki structure for rich UI
+    const mapped = filtered.map((ex) => {
+      return {
+        id: ex.id,
+        name: ex.name,
+        primary_muscles: Array.isArray(ex.primary_muscles) ? ex.primary_muscles : [],
+        secondary_muscles: Array.isArray(ex.secondary_muscles) ? ex.secondary_muscles : [],
+        category: ex.category || '',
+        force: ex.force || '',
+        mechanic: ex.mechanic || '',
+        difficulty: ex.difficulty || '',
+        steps: Array.isArray(ex.steps) ? ex.steps : [],
+        videos: Array.isArray(ex.videos) ? ex.videos : [],
+        // Legacy fields for backward compatibility
+        type: ex.category || '',
+        muscle: [...(Array.isArray(ex.primary_muscles) ? ex.primary_muscles : []), ...(Array.isArray(ex.secondary_muscles) ? ex.secondary_muscles : [])].join(', '),
+        equipment: ex.category || '',
+        instructions: Array.isArray(ex.steps) ? ex.steps.join(' ') : '',
+        youtubeSearchUrl: Array.isArray(ex.videos) && ex.videos.length > 0 ? ex.videos[0].url : null,
+        thumbnailUrl: Array.isArray(ex.videos) && ex.videos.length > 0 ? ex.videos[0].og_image : null,
+        videoId: null,
+      };
+    });
+
+    // Limit to keep UI snappy
+    return res.json(mapped.slice(0, 20));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'server_error' });
@@ -393,7 +444,32 @@ async function ensureWorkoutLogsTable() {
   }
 }
 
+// Ensure exercises table exists
+async function ensureExercisesTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS exercises (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(100),
+        muscle VARCHAR(100),
+        equipment VARCHAR(100),
+        difficulty VARCHAR(50),
+        instructions TEXT,
+        video_url VARCHAR(500),
+        thumbnail_url VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(name)
+      )
+    `);
+    console.log('Exercises table ensured');
+  } catch (err) {
+    console.error('Error ensuring exercises table:', err);
+  }
+}
+
 ensureWorkoutLogsTable();
+ensureExercisesTable();
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
